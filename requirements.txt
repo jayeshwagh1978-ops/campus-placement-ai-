@@ -50,7 +50,4 @@ pytest==7.4.3
 black==23.11.0
 flake8==6.1.0
 
-pysqlite3-binary
-import sys
-__import__('pysqlite3')
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+
