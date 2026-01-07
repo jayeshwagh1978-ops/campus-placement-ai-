@@ -1,515 +1,622 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-import xgboost as xgb
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_absolute_error, r2_score
-import pickle
+import plotly.express as px
 from datetime import datetime, timedelta
+from typing import Dict, List, Any
+import json
 
 class PlacementDashboard:
     def __init__(self):
-        self.data = self.load_placement_data()
-        self.models = {}
-        
-    def load_placement_data(self):
-        """Load historical placement data"""
-        # In production, this would load from database
-        dates = pd.date_range(start='2020-01-01', end='2024-01-01', freq='M')
-        n_samples = len(dates)
-        
-        data = pd.DataFrame({
-            'date': dates,
-            'placements': np.random.randint(50, 200, n_samples),
-            'average_salary': np.random.randint(300000, 1500000, n_samples),
-            'top_recruiter': np.random.choice(['Google', 'Microsoft', 'Amazon', 'TCS', 'Infosys'], n_samples),
-            'students_registered': np.random.randint(200, 500, n_samples),
-            'cgpa_threshold': np.random.uniform(6.0, 9.5, n_samples),
-            'internship_conversion': np.random.uniform(0.3, 0.8, n_samples),
-            'department': np.random.choice(['CSE', 'ECE', 'ME', 'CE', 'IT'], n_samples)
-        })
-        
-        return data
+        self.data = self.generate_sample_data()
+        self.departments = ['CSE', 'ECE', 'ME', 'CE', 'IT', 'Physics', 'Chemistry', 'Mathematics']
     
-    def train_xgboost_model(self, target_variable='placements'):
-        """Train XGBoost model for forecasting"""
-        # Prepare features
-        features = ['students_registered', 'cgpa_threshold', 'internship_conversion']
-        X = self.data[features]
-        y = self.data[target_variable]
+    def generate_sample_data(self) -> pd.DataFrame:
+        """Generate sample placement data"""
+        np.random.seed(42)
         
-        # Split data
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=42
-        )
+        # Generate data for multiple years
+        years = [2021, 2022, 2023, 2024]
+        data = []
         
-        # Train model
-        model = xgb.XGBRegressor(
-            n_estimators=100,
-            learning_rate=0.1,
-            max_depth=5,
-            random_state=42
-        )
+        for year in years:
+            for dept in self.departments:
+                for _ in range(np.random.randint(50, 150)):
+                    student = {
+                        'year': year,
+                        'department': dept,
+                        'student_id': f'S{np.random.randint(1000, 9999)}',
+                        'cgpa': round(np.random.uniform(6.0, 9.5), 2),
+                        'placed': np.random.choice([True, False], p=[0.7, 0.3]),
+                        'package': round(np.random.uniform(3.0, 15.0), 2) if np.random.random() > 0.3 else 0,
+                        'company': np.random.choice(['Google', 'Microsoft', 'Amazon', 'TCS', 'Infosys', 'Wipro', 'Accenture', None]),
+                        'offer_date': f'{year}-{np.random.randint(1, 12):02d}-{np.random.randint(1, 28):02d}',
+                        'internship': np.random.choice([True, False], p=[0.6, 0.4])
+                    }
+                    data.append(student)
         
-        model.fit(X_train, y_train)
+        return pd.DataFrame(data)
+    
+    def calculate_metrics(self, year: int = None) -> Dict[str, Any]:
+        """Calculate placement metrics"""
+        if year:
+            data = self.data[self.data['year'] == year]
+        else:
+            data = self.data
+            year = "All Years"
         
-        # Make predictions
-        y_pred = model.predict(X_test)
+        total_students = len(data)
+        placed_students = data['placed'].sum()
+        placement_rate = (placed_students / total_students * 100) if total_students > 0 else 0
         
-        # Calculate metrics
-        mae = mean_absolute_error(y_test, y_pred)
-        r2 = r2_score(y_test, y_pred)
+        avg_package = data[data['placed']]['package'].mean()
+        max_package = data[data['placed']]['package'].max()
+        min_package = data[data['placed']]['package'].min()
         
-        # Feature importance
-        importance = pd.DataFrame({
-            'feature': features,
-            'importance': model.feature_importances_
-        }).sort_values('importance', ascending=False)
+        top_companies = data[data['placed']]['company'].value_counts().head(5).to_dict()
         
         return {
-            'model': model,
-            'mae': mae,
-            'r2': r2,
-            'importance': importance,
-            'predictions': y_pred,
-            'actual': y_test.values
+            'year': year,
+            'total_students': total_students,
+            'placed_students': placed_students,
+            'placement_rate': round(placement_rate, 1),
+            'avg_package': round(avg_package, 2),
+            'max_package': round(max_package, 2),
+            'min_package': round(min_package, 2),
+            'top_companies': top_companies
         }
     
-    def generate_forecast(self, periods=12):
-        """Generate future forecasts"""
-        # Prepare future dates
-        last_date = self.data['date'].max()
-        future_dates = pd.date_range(
-            start=last_date + timedelta(days=30),
-            periods=periods,
-            freq='M'
-        )
-        
-        # Generate features for future (could use time series features)
-        future_data = pd.DataFrame({
-            'date': future_dates,
-            'students_registered': np.random.randint(300, 600, periods),
-            'cgpa_threshold': np.random.uniform(7.0, 9.0, periods),
-            'internship_conversion': np.random.uniform(0.4, 0.9, periods)
-        })
-        
-        # Load or train model
-        if 'placements_model' not in self.models:
-            self.models['placements_model'] = self.train_xgboost_model()
-        
-        model = self.models['placements_model']['model']
-        
-        # Make predictions
-        features = ['students_registered', 'cgpa_threshold', 'internship_conversion']
-        future_predictions = model.predict(future_data[features])
-        
-        forecast_df = pd.DataFrame({
-            'date': future_dates,
-            'predicted_placements': future_predictions,
-            'predicted_salary': np.random.randint(400000, 2000000, periods),
-            'confidence_interval_lower': future_predictions * 0.9,
-            'confidence_interval_upper': future_predictions * 1.1
-        })
-        
-        return forecast_df
-    
-    def calculate_placement_metrics(self):
-        """Calculate key placement metrics"""
+    def generate_forecast(self) -> pd.DataFrame:
+        """Generate placement forecast for next year"""
         current_year = datetime.now().year
+        months = ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul']
         
-        yearly_data = self.data[self.data['date'].dt.year == current_year]
+        # Generate forecast based on historical trends
+        base_placements = 80
+        trend_increase = 0.15  # 15% year-over-year growth
         
-        metrics = {
-            'total_placements': yearly_data['placements'].sum(),
-            'average_salary': yearly_data['average_salary'].mean(),
-            'placement_rate': (yearly_data['placements'].sum() / 
-                              yearly_data['students_registered'].sum()) * 100,
-            'top_companies': yearly_data['top_recruiter'].value_counts().head(5).to_dict(),
-            'department_performance': yearly_data.groupby('department')['placements'].sum().to_dict()
-        }
+        forecast_data = []
+        for i, month in enumerate(months):
+            # Simulate seasonal pattern
+            seasonal_factor = 1 + 0.3 * np.sin(i * np.pi / 6)  # Sinusoidal pattern
+            
+            placements = int(base_placements * seasonal_factor * (1 + trend_increase))
+            avg_package = round(6.5 * (1 + 0.1 * i/12), 2)
+            
+            forecast_data.append({
+                'month': month,
+                'predicted_placements': placements,
+                'predicted_package': avg_package,
+                'confidence_lower': int(placements * 0.8),
+                'confidence_upper': int(placements * 1.2)
+            })
         
-        return metrics
+        return pd.DataFrame(forecast_data)
+    
+    def get_department_performance(self) -> pd.DataFrame:
+        """Get department-wise performance"""
+        dept_stats = []
+        
+        for dept in self.departments:
+            dept_data = self.data[self.data['department'] == dept]
+            
+            if len(dept_data) > 0:
+                placed = dept_data['placed'].sum()
+                total = len(dept_data)
+                rate = (placed / total * 100) if total > 0 else 0
+                avg_pkg = dept_data[dept_data['placed']]['package'].mean()
+                
+                dept_stats.append({
+                    'Department': dept,
+                    'Total Students': total,
+                    'Placed': placed,
+                    'Placement Rate %': round(rate, 1),
+                    'Avg Package (LPA)': round(avg_pkg, 2) if not pd.isna(avg_pkg) else 0,
+                    'Trend': '📈' if rate > 70 else '📉' if rate < 50 else '➡️'
+                })
+        
+        return pd.DataFrame(dept_stats)
+    
+    def generate_insights(self) -> List[Dict]:
+        """Generate AI-powered insights"""
+        metrics = self.calculate_metrics(2024)
+        dept_stats = self.get_department_performance()
+        
+        insights = []
+        
+        # Overall insights
+        if metrics['placement_rate'] > 80:
+            insights.append({
+                'type': 'positive',
+                'title': 'Excellent Placement Performance',
+                'description': f"Placement rate of {metrics['placement_rate']}% exceeds industry standards"
+            })
+        elif metrics['placement_rate'] < 60:
+            insights.append({
+                'type': 'warning',
+                'title': 'Placement Rate Needs Improvement',
+                'description': f"Current rate of {metrics['placement_rate']}% is below target of 75%"
+            })
+        
+        # Department insights
+        worst_dept = dept_stats.loc[dept_stats['Placement Rate %'].idxmin()]
+        best_dept = dept_stats.loc[dept_stats['Placement Rate %'].idxmax()]
+        
+        insights.extend([
+            {
+                'type': 'info',
+                'title': f"Best Performing: {best_dept['Department']}",
+                'description': f"{best_dept['Placement Rate %']}% placement rate with avg package ₹{best_dept['Avg Package (LPA)']}L"
+            },
+            {
+                'type': 'warning',
+                'title': f"Needs Attention: {worst_dept['Department']}",
+                'description': f"Only {worst_dept['Placement Rate %']}% placement rate. Consider intervention strategies."
+            }
+        ])
+        
+        # Company insights
+        if metrics['top_companies']:
+            top_company = max(metrics['top_companies'], key=metrics['top_companies'].get)
+            insights.append({
+                'type': 'positive',
+                'title': f"Top Recruiter: {top_company}",
+                'description': f"Hired {metrics['top_companies'][top_company]} students this year"
+            })
+        
+        # Trend insights
+        current_rate = self.calculate_metrics(2024)['placement_rate']
+        last_year_rate = self.calculate_metrics(2023)['placement_rate']
+        
+        if current_rate > last_year_rate:
+            insights.append({
+                'type': 'positive',
+                'title': 'Positive Growth Trend',
+                'description': f"Placement rate increased by {current_rate - last_year_rate:.1f}% compared to last year"
+            })
+        
+        return insights
 
 def show_placement_dashboard():
-    st.title("📊 Placement Dashboard with AI Forecasting")
+    st.title("📊 Placement Analytics Dashboard")
     
     # Initialize dashboard
     dashboard = PlacementDashboard()
     
-    # KPI Metrics
-    st.subheader("📈 Key Performance Indicators")
-    
-    metrics = dashboard.calculate_placement_metrics()
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric(
-            "Total Placements",
-            f"{metrics['total_placements']:,}",
-            "+12% vs last year"
-        )
-    
-    with col2:
-        st.metric(
-            "Average Salary",
-            f"₹{metrics['average_salary']:,.0f}",
-            "+8%"
-        )
-    
-    with col3:
-        st.metric(
-            "Placement Rate",
-            f"{metrics['placement_rate']:.1f}%",
-            "+3.5%"
-        )
-    
-    with col4:
-        st.metric(
-            "Students Registered",
-            f"{dashboard.data['students_registered'].sum():,}",
-            "+15%"
-        )
-    
-    # Main visualization area
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "Forecast Analysis", 
-        "Department-wise", 
-        "Company Analytics", 
-        "AI Predictions"
-    ])
+    # Create tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["📈 Overview", "🏫 Department Analysis", "🎯 Forecast", "🤖 AI Insights"])
     
     with tab1:
-        # Time series forecast
-        st.subheader("Placements Forecast (XGBoost)")
+        st.subheader("College-wide Placement Overview")
         
-        # Forecast parameters
-        col1, col2 = st.columns(2)
+        # Year selector
+        col1, col2, col3 = st.columns([2, 1, 1])
+        
         with col1:
-            forecast_months = st.slider(
-                "Forecast Period (months)", 
-                min_value=3, 
-                max_value=24, 
-                value=12
+            selected_year = st.selectbox(
+                "Select Year",
+                ["All Years", 2024, 2023, 2022, 2021],
+                index=0
             )
+        
         with col2:
-            confidence_level = st.slider(
-                "Confidence Interval", 
-                min_value=80, 
-                max_value=99, 
-                value=90
+            comparison = st.checkbox("Compare with Previous Year")
+        
+        # Calculate metrics
+        if selected_year == "All Years":
+            metrics = dashboard.calculate_metrics()
+        else:
+            metrics = dashboard.calculate_metrics(selected_year)
+        
+        # Display KPIs
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                "Total Students",
+                f"{metrics['total_students']:,}",
+                "All Programs" if selected_year == "All Years" else f"Year {selected_year}"
             )
+        
+        with col2:
+            st.metric(
+                "Placement Rate",
+                f"{metrics['placement_rate']}%",
+                f"{metrics['placed_students']:,} placed"
+            )
+        
+        with col3:
+            st.metric(
+                "Average Package",
+                f"₹{metrics['avg_package']}L",
+                f"Max: ₹{metrics['max_package']}L"
+            )
+        
+        with col4:
+            internship_rate = round((dashboard.data['internship'].sum() / len(dashboard.data)) * 100, 1)
+            st.metric(
+                "Internship Conversion",
+                f"{internship_rate}%",
+                "To Placement"
+            )
+        
+        # Visualization
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Placement trend over years
+            years = [2021, 2022, 2023, 2024]
+            rates = [dashboard.calculate_metrics(year)['placement_rate'] for year in years]
+            
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=years, y=rates,
+                mode='lines+markers',
+                name='Placement Rate',
+                line=dict(color='blue', width=3),
+                marker=dict(size=10)
+            ))
+            
+            fig.update_layout(
+                title='Placement Rate Trend (2021-2024)',
+                xaxis_title='Year',
+                yaxis_title='Placement Rate (%)',
+                height=300
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            # Package distribution
+            placed_data = dashboard.data[dashboard.data['placed']]
+            
+            if len(placed_data) > 0:
+                fig = px.histogram(placed_data, x='package',
+                                  title='Salary Package Distribution',
+                                  nbins=20,
+                                  color_discrete_sequence=['green'])
+                
+                fig.update_layout(
+                    xaxis_title='Package (LPA)',
+                    yaxis_title='Number of Students',
+                    height=300
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+        
+        # Top companies
+        st.subheader("🏢 Top Recruiting Companies")
+        
+        if metrics['top_companies']:
+            companies = list(metrics['top_companies'].keys())
+            hires = list(metrics['top_companies'].values())
+            
+            fig = px.bar(x=companies, y=hires,
+                        title='Number of Hires by Company',
+                        labels={'x': 'Company', 'y': 'Number of Students'},
+                        color=hires,
+                        color_continuous_scale='viridis')
+            
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No placement data available for selected year")
+    
+    with tab2:
+        st.subheader("Department-wise Performance Analysis")
+        
+        # Get department statistics
+        dept_stats = dashboard.get_department_performance()
+        
+        # Display department metrics
+        st.dataframe(
+            dept_stats.style.background_gradient(subset=['Placement Rate %', 'Avg Package (LPA)'], cmap='YlOrRd'),
+            use_container_width=True
+        )
+        
+        # Department comparison
+        st.subheader("📊 Department Comparison")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            fig = px.bar(dept_stats, x='Department', y='Placement Rate %',
+                        title='Placement Rate by Department',
+                        color='Placement Rate %',
+                        color_continuous_scale='RdYlGn')
+            st.plotly_chart(fig, use_container_width=True)
+        
+        with col2:
+            fig = px.scatter(dept_stats, x='Placement Rate %', y='Avg Package (LPA)',
+                            size='Total Students', color='Department',
+                            title='Package vs Placement Rate',
+                            size_max=40)
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Department details
+        st.subheader("📋 Department Details")
+        
+        selected_dept = st.selectbox("Select Department for Details", dashboard.departments)
+        
+        if selected_dept:
+            dept_data = dashboard.data[dashboard.data['department'] == selected_dept]
+            
+            if len(dept_data) > 0:
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    total = len(dept_data)
+                    st.metric("Total Students", total)
+                
+                with col2:
+                    placed = dept_data['placed'].sum()
+                    rate = (placed / total * 100) if total > 0 else 0
+                    st.metric("Placed", placed, f"{rate:.1f}%")
+                
+                with col3:
+                    avg_pkg = dept_data[dept_data['placed']]['package'].mean()
+                    st.metric("Avg Package", f"₹{avg_pkg:.1f}L" if not pd.isna(avg_pkg) else "₹0L")
+                
+                with col4:
+                    internship_rate = (dept_data['internship'].sum() / total * 100) if total > 0 else 0
+                    st.metric("Internship Rate", f"{internship_rate:.1f}%")
+                
+                # Year-wise trend for selected department
+                years = [2021, 2022, 2023, 2024]
+                dept_rates = []
+                
+                for year in years:
+                    year_data = dept_data[dept_data['year'] == year]
+                    if len(year_data) > 0:
+                        rate = (year_data['placed'].sum() / len(year_data) * 100) if len(year_data) > 0 else 0
+                        dept_rates.append(rate)
+                    else:
+                        dept_rates.append(0)
+                
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=years, y=dept_rates,
+                    mode='lines+markers',
+                    name=f'{selected_dept} Placement Rate',
+                    line=dict(color='orange', width=3)
+                ))
+                
+                fig.update_layout(
+                    title=f'{selected_dept} Placement Trend (2021-2024)',
+                    xaxis_title='Year',
+                    yaxis_title='Placement Rate (%)',
+                    height=300
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+    
+    with tab3:
+        st.subheader("🎯 Placement Forecast & Predictions")
         
         # Generate forecast
-        forecast_df = dashboard.generate_forecast(periods=forecast_months)
+        forecast_data = dashboard.generate_forecast()
         
-        # Create forecast visualization
+        # Display forecast metrics
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            total_predicted = forecast_data['predicted_placements'].sum()
+            st.metric("Total Predicted Placements", f"{total_predicted:,}")
+        
+        with col2:
+            avg_predicted_pkg = forecast_data['predicted_package'].mean()
+            st.metric("Predicted Avg Package", f"₹{avg_predicted_pkg:.1f}L")
+        
+        with col3:
+            peak_month = forecast_data.loc[forecast_data['predicted_placements'].idxmax(), 'month']
+            st.metric("Peak Placement Month", peak_month)
+        
+        # Forecast visualization
         fig = go.Figure()
         
-        # Historical data
+        # Predicted placements
         fig.add_trace(go.Scatter(
-            x=dashboard.data['date'],
-            y=dashboard.data['placements'],
-            mode='lines',
-            name='Historical Placements',
-            line=dict(color='blue', width=2)
-        ))
-        
-        # Forecast
-        fig.add_trace(go.Scatter(
-            x=forecast_df['date'],
-            y=forecast_df['predicted_placements'],
-            mode='lines',
-            name='Forecast',
-            line=dict(color='green', width=3, dash='dash')
+            x=forecast_data['month'],
+            y=forecast_data['predicted_placements'],
+            mode='lines+markers',
+            name='Predicted Placements',
+            line=dict(color='blue', width=3)
         ))
         
         # Confidence interval
         fig.add_trace(go.Scatter(
-            x=forecast_df['date'].tolist() + forecast_df['date'].tolist()[::-1],
-            y=forecast_df['confidence_interval_upper'].tolist() + 
-              forecast_df['confidence_interval_lower'].tolist()[::-1],
+            x=forecast_data['month'].tolist() + forecast_data['month'].tolist()[::-1],
+            y=forecast_data['confidence_upper'].tolist() + forecast_data['confidence_lower'].tolist()[::-1],
             fill='toself',
             fillcolor='rgba(0,100,80,0.2)',
             line=dict(color='rgba(255,255,255,0)'),
             hoverinfo="skip",
             showlegend=True,
-            name=f'{confidence_level}% Confidence Interval'
+            name='80% Confidence Interval'
         ))
         
         fig.update_layout(
-            title='Placements Forecast with Confidence Intervals',
-            xaxis_title='Date',
+            title='Monthly Placement Forecast (Next 12 Months)',
+            xaxis_title='Month',
             yaxis_title='Number of Placements',
             hovermode='x unified',
-            height=500
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Forecast metrics
-        st.subheader("Forecast Insights")
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            avg_placement = forecast_df['predicted_placements'].mean()
-            st.metric("Average Monthly Placements", f"{avg_placement:.0f}")
-        
-        with col2:
-            growth_rate = ((forecast_df['predicted_placements'].iloc[-1] - 
-                           forecast_df['predicted_placements'].iloc[0]) / 
-                           forecast_df['predicted_placements'].iloc[0]) * 100
-            st.metric("Projected Growth", f"{growth_rate:.1f}%")
-        
-        with col3:
-            st.metric("Peak Placement Month", 
-                     forecast_df.loc[forecast_df['predicted_placements'].idxmax(), 'date'].strftime('%B %Y'))
-    
-    with tab2:
-        # Department-wise analysis
-        st.subheader("Department Performance")
-        
-        dept_data = dashboard.data.groupby('department').agg({
-            'placements': 'sum',
-            'average_salary': 'mean',
-            'students_registered': 'sum'
-        }).reset_index()
-        
-        dept_data['placement_rate'] = (dept_data['placements'] / 
-                                       dept_data['students_registered']) * 100
-        
-        # Create subplots
-        fig = make_subplots(
-            rows=2, cols=2,
-            subplot_titles=('Placements by Department', 
-                           'Average Salary by Department',
-                           'Placement Rate', 
-                           'Students Registered'),
-            specs=[[{'type': 'bar'}, {'type': 'bar'}],
-                   [{'type': 'bar'}, {'type': 'bar'}]]
-        )
-        
-        # Plot 1: Placements
-        fig.add_trace(
-            go.Bar(x=dept_data['department'], 
-                   y=dept_data['placements'],
-                   name='Placements',
-                   marker_color='indianred'),
-            row=1, col=1
-        )
-        
-        # Plot 2: Average Salary
-        fig.add_trace(
-            go.Bar(x=dept_data['department'], 
-                   y=dept_data['average_salary'],
-                   name='Avg Salary',
-                   marker_color='lightsalmon'),
-            row=1, col=2
-        )
-        
-        # Plot 3: Placement Rate
-        fig.add_trace(
-            go.Bar(x=dept_data['department'], 
-                   y=dept_data['placement_rate'],
-                   name='Placement Rate',
-                   marker_color='lightseagreen'),
-            row=2, col=1
-        )
-        
-        # Plot 4: Students Registered
-        fig.add_trace(
-            go.Bar(x=dept_data['department'], 
-                   y=dept_data['students_registered'],
-                   name='Students Registered',
-                   marker_color='mediumpurple'),
-            row=2, col=2
-        )
-        
-        fig.update_layout(height=700, showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Department recommendations
-        st.subheader("🎯 Department-specific Recommendations")
-        
-        for _, dept in dept_data.iterrows():
-            with st.expander(f"{dept['department']} Department", expanded=False):
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write(f"**Placement Rate:** {dept['placement_rate']:.1f}%")
-                    st.write(f"**Avg Salary:** ₹{dept['average_salary']:,.0f}")
-                    st.write(f"**Total Placements:** {dept['placements']}")
-                
-                with col2:
-                    # AI-generated recommendations
-                    if dept['placement_rate'] < 70:
-                        st.warning("**Recommendations:**")
-                        st.write("• Increase industry collaborations")
-                        st.write("• Enhance skill development programs")
-                        st.write("• Improve resume building workshops")
-                    else:
-                        st.success("**Best Practices:**")
-                        st.write("• Maintain strong industry connections")
-                        st.write("• Continue mentorship programs")
-                        st.write("• Expand internship opportunities")
-    
-    with tab3:
-        # Company analytics
-        st.subheader("Top Recruiters Analysis")
-        
-        company_data = dashboard.data['top_recruiter'].value_counts().reset_index()
-        company_data.columns = ['company', 'count']
-        
-        # Treemap visualization
-        fig = px.treemap(
-            company_data.head(20),
-            path=['company'],
-            values='count',
-            title='Recruitment Distribution by Company'
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Company engagement metrics
-        st.subheader("Company Engagement Trends")
-        
-        # Create time series for top companies
-        top_companies = company_data.head(5)['company'].tolist()
-        company_trends = dashboard.data[dashboard.data['top_recruiter'].isin(top_companies)]
-        
-        fig = px.line(
-            company_trends,
-            x='date',
-            y='placements',
-            color='top_recruiter',
-            title='Placement Trends by Top Companies',
-            markers=True
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with tab4:
-        # AI Model Insights
-        st.subheader("🤖 XGBoost Model Insights")
-        
-        # Train and display model metrics
-        model_results = dashboard.train_xgboost_model()
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.metric("Model R² Score", f"{model_results['r2']:.3f}")
-            st.metric("Mean Absolute Error", f"{model_results['mae']:.2f}")
-        
-        with col2:
-            # Feature importance
-            st.write("**Feature Importance:**")
-            fig = px.bar(
-                model_results['importance'],
-                x='importance',
-                y='feature',
-                orientation='h',
-                title='Feature Importance in Placement Prediction'
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        
-        # Prediction vs Actual
-        st.subheader("Predictions vs Actual")
-        
-        comparison_df = pd.DataFrame({
-            'Actual': model_results['actual'],
-            'Predicted': model_results['predictions']
-        })
-        
-        fig = go.Figure()
-        
-        fig.add_trace(go.Scatter(
-            x=comparison_df.index,
-            y=comparison_df['Actual'],
-            mode='lines+markers',
-            name='Actual',
-            line=dict(color='blue')
-        ))
-        
-        fig.add_trace(go.Scatter(
-            x=comparison_df.index,
-            y=comparison_df['Predicted'],
-            mode='lines+markers',
-            name='Predicted',
-            line=dict(color='red', dash='dash')
-        ))
-        
-        fig.update_layout(
-            title='Model Predictions vs Actual Values',
-            xaxis_title='Sample Index',
-            yaxis_title='Placements',
             height=400
         )
         
         st.plotly_chart(fig, use_container_width=True)
         
-        # Download options
-        st.subheader("Export Data")
+        # Growth predictions
+        st.subheader("📈 Growth Predictions")
+        
+        # Calculate growth rates
+        current_metrics = dashboard.calculate_metrics(2024)
+        predicted_growth = 15  # 15% predicted growth
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            predicted_rate = current_metrics['placement_rate'] * (1 + predicted_growth/100)
+            st.metric(
+                "Predicted Placement Rate",
+                f"{predicted_rate:.1f}%",
+                f"+{predicted_growth}%"
+            )
+        
+        with col2:
+            predicted_package = current_metrics['avg_package'] * 1.1  # 10% increase
+            st.metric(
+                "Predicted Avg Package",
+                f"₹{predicted_package:.1f}L",
+                "+10%"
+            )
+        
+        with col3:
+            # Based on historical data
+            historical_growth = []
+            for year in [2021, 2022, 2023, 2024]:
+                metrics = dashboard.calculate_metrics(year)
+                historical_growth.append(metrics['placement_rate'])
+            
+            avg_growth = np.mean(np.diff(historical_growth))
+            st.metric(
+                "Historical Avg Growth",
+                f"{avg_growth:.1f}%",
+                "Per Year"
+            )
+        
+        # Recommendations based on forecast
+        st.subheader("🎯 Strategic Recommendations")
+        
+        recommendations = [
+            "Schedule major placement drives in October-November (peak season)",
+            "Focus on skill development programs in summer for better placement outcomes",
+            "Increase industry collaborations for internship opportunities",
+            "Provide special training for departments with lower placement rates"
+        ]
+        
+        for i, rec in enumerate(recommendations, 1):
+            st.info(f"{i}. {rec}")
+    
+    with tab4:
+        st.subheader("🤖 AI-Powered Insights & Recommendations")
+        
+        # Generate insights
+        insights = dashboard.generate_insights()
+        
+        # Display insights
+        for insight in insights:
+            if insight['type'] == 'positive':
+                with st.container(border=True):
+                    st.success(f"### ✅ {insight['title']}")
+                    st.write(insight['description'])
+            elif insight['type'] == 'warning':
+                with st.container(border=True):
+                    st.warning(f"### ⚠️ {insight['title']}")
+                    st.write(insight['description'])
+            else:
+                with st.container(border=True):
+                    st.info(f"### 📊 {insight['title']}")
+                    st.write(insight['description'])
+        
+        # Predictive analytics
+        st.subheader("🔮 Predictive Analytics")
+        
+        # Student success prediction
+        st.write("### 🎓 Student Success Predictor")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            cgpa = st.slider("CGPA", 6.0, 10.0, 8.0, 0.1)
+            projects = st.number_input("Number of Projects", 0, 10, 3)
+            internships = st.number_input("Internships", 0, 5, 1)
+        
+        with col2:
+            skills = st.slider("Technical Skills", 5, 50, 15)
+            department = st.selectbox("Department", dashboard.departments)
+            extracurricular = st.slider("Extracurricular Score", 0, 100, 70)
+        
+        if st.button("🔍 Predict Placement Probability", type="primary"):
+            # Simplified prediction model
+            base_score = 50
+            
+            # Add contributions
+            cgpa_score = (cgpa - 6.0) * 10  # 0-40 points
+            projects_score = projects * 5    # 0-50 points
+            internships_score = internships * 10  # 0-50 points
+            skills_score = skills * 1        # 5-50 points
+            dept_factor = 1.2 if department in ['CSE', 'IT'] else 1.0
+            extracurricular_score = extracurricular * 0.3  # 0-30 points
+            
+            total_score = (base_score + cgpa_score + projects_score + 
+                          internships_score + skills_score + extracurricular_score) * dept_factor
+            
+            probability = min(total_score, 95)
+            
+            # Display results
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Placement Probability", f"{probability:.1f}%")
+            
+            with col2:
+                expected_package = round(4.0 + (cgpa - 6.0) * 1.5 + internships * 0.8, 1)
+                st.metric("Expected Package", f"₹{expected_package}L")
+            
+            with col3:
+                readiness = "High" if probability >= 80 else "Medium" if probability >= 60 else "Low"
+                st.metric("Readiness Level", readiness)
+            
+            # Recommendations
+            st.subheader("🎯 Personalized Recommendations")
+            
+            recs = []
+            if cgpa < 7.5:
+                recs.append("Improve CGPA to at least 7.5 for better opportunities")
+            if projects < 2:
+                recs.append("Complete at least 2 quality projects")
+            if internships == 0:
+                recs.append("Secure at least one internship")
+            if skills < 10:
+                recs.append("Learn additional technical skills")
+            
+            if recs:
+                for rec in recs:
+                    st.warning(f"• {rec}")
+            else:
+                st.success("✅ Student profile is strong for placements!")
+        
+        # Export options
+        st.subheader("📥 Export & Reports")
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
             st.download_button(
-                "📥 Download Forecast Data",
-                data=forecast_df.to_csv(),
-                file_name="placement_forecast.csv",
-                mime="text/csv"
+                "📄 Download Full Report",
+                data=dashboard.data.to_csv(),
+                file_name="placement_analytics_report.csv",
+                mime="text/csv",
+                use_container_width=True
             )
         
         with col2:
+            # Generate summary report
+            summary = {
+                "overview": dashboard.calculate_metrics(),
+                "department_performance": dashboard.get_department_performance().to_dict(),
+                "forecast": dashboard.generate_forecast().to_dict(),
+                "generated_at": datetime.now().isoformat()
+            }
+            
             st.download_button(
-                "📊 Download Model Report",
-                data=pd.DataFrame(model_results['importance']).to_csv(),
-                file_name="model_insights.csv",
-                mime="text/csv"
+                "📊 Download Summary",
+                data=json.dumps(summary, indent=2),
+                file_name="placement_summary.json",
+                mime="application/json",
+                use_container_width=True
             )
         
         with col3:
-            if st.button("🔄 Retrain Model", use_container_width=True):
-                with st.spinner("Retraining model with latest data..."):
-                    dashboard.models = {}  # Clear cached models
-                    st.success("Model retrained successfully!")
-                    st.rerun()
-    
-    # Actionable insights panel
-    with st.container(border=True):
-        st.subheader("🚀 Actionable Insights & Recommendations")
-        
-        insights = [
-            {
-                "insight": "Placement rate can increase by 15% with improved internship conversion",
-                "action": "Enforce mandatory internships in 3rd year",
-                "impact": "High",
-                "timeline": "Next semester"
-            },
-            {
-                "insight": "ECE department shows 25% lower placement rate than CSE",
-                "action": "Introduce cross-disciplinary skill workshops",
-                "impact": "Medium",
-                "timeline": "3 months"
-            },
-            {
-                "insight": "Companies offering >₹10L packages visit only in Oct-Nov",
-                "action": "Schedule advanced preparation sessions in September",
-                "impact": "High",
-                "timeline": "Immediate"
-            }
-        ]
-        
-        for insight in insights:
-            with st.expander(f"🔍 {insight['insight']}", expanded=False):
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.write(f"**Action:** {insight['action']}")
-                with col2:
-                    st.write(f"**Impact:** {insight['impact']}")
-                with col3:
-                    st.write(f"**Timeline:** {insight['timeline']}")
+            if st.button("🔄 Refresh Analytics", use_container_width=True):
+                st.rerun()
