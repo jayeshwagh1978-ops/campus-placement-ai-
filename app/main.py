@@ -1,422 +1,634 @@
-# app/main.py
 import streamlit as st
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.preprocessing import LabelEncoder
-import matplotlib.pyplot as plt
-import seaborn as sns
+from datetime import datetime
 
 # Page configuration
 st.set_page_config(
-    page_title="Campus Placement AI",
+    page_title="Campus Placement AI Platform",
     page_icon="🎓",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# Title and description
-st.title("🎓 Campus Placement Prediction AI")
+# Custom CSS
 st.markdown("""
-This AI tool predicts whether a student will get placed based on their academic and personal profile.
-Upload your dataset or use the sample data to get predictions.
-""")
-
-# Sidebar for navigation
-st.sidebar.title("Navigation")
-option = st.sidebar.radio("Choose an option:", 
-                         ["Home", "Upload Data", "Data Analysis", "Model Training", "Predictions", "About"])
-
-# Initialize session state for data storage
-if 'df' not in st.session_state:
-    st.session_state.df = None
-if 'model' not in st.session_state:
-    st.session_state.model = None
-if 'encoders' not in st.session_state:
-    st.session_state.encoders = {}
-
-# Sample data for demo
-def create_sample_data():
-    """Create sample campus placement data"""
-    np.random.seed(42)
-    n_samples = 100
-    
-    data = {
-        'CGPA': np.random.uniform(6.0, 10.0, n_samples),
-        'Internships': np.random.randint(0, 4, n_samples),
-        'Projects': np.random.randint(0, 6, n_samples),
-        'Backlogs': np.random.randint(0, 3, n_samples),
-        'Communication_Score': np.random.randint(1, 11, n_samples),
-        'Technical_Score': np.random.randint(1, 11, n_samples),
-        'Department': np.random.choice(['CSE', 'ECE', 'ME', 'CE', 'IT'], n_samples),
-        'Gender': np.random.choice(['Male', 'Female'], n_samples)
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        color: #1E3A8A;
+        text-align: center;
+        margin-bottom: 2rem;
+        padding: 1rem;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
     }
-    
-    # Create target variable (Placement status) based on features
-    placement_score = (data['CGPA'] * 0.3 + 
-                      data['Internships'] * 0.2 + 
-                      data['Projects'] * 0.15 + 
-                      data['Communication_Score'] * 0.15 +
-                      data['Technical_Score'] * 0.2 -
-                      data['Backlogs'] * 0.5)
-    
-    data['Placed'] = (placement_score > 5.0).astype(int)
-    
-    return pd.DataFrame(data)
+    .feature-card {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        margin: 15px 0;
+        border-left: 5px solid #3B82F6;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s;
+    }
+    .feature-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+    }
+    .metric-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# Home page
-if option == "Home":
-    st.header("Welcome to Campus Placement AI")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.info("📊 **Data Analysis**")
-        st.write("Analyze student data and visualize patterns")
-    
-    with col2:
-        st.success("🤖 **AI Prediction**")
-        st.write("Predict placement chances using ML algorithms")
-    
-    with col3:
-        st.warning("📈 **Insights**")
-        st.write("Get actionable insights for improvement")
-    
-    st.markdown("---")
-    
-    # Show sample data preview
-    st.subheader("Sample Data Preview")
-    sample_df = create_sample_data()
-    st.dataframe(sample_df.head(), use_container_width=True)
-    
-    # Statistics
-    st.subheader("Sample Statistics")
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Total Students", len(sample_df))
-    
-    with col2:
-        placed_count = sample_df['Placed'].sum()
-        st.metric("Placed Students", placed_count)
-    
-    with col3:
-        placement_rate = (placed_count / len(sample_df)) * 100
-        st.metric("Placement Rate", f"{placement_rate:.1f}%")
-    
-    with col4:
-        avg_cgpa = sample_df['CGPA'].mean()
-        st.metric("Average CGPA", f"{avg_cgpa:.2f}")
+# Session state initialization
+if 'user_type' not in st.session_state:
+    st.session_state.user_type = None
+if 'username' not in st.session_state:
+    st.session_state.username = None
 
-# Upload Data page
-elif option == "Upload Data":
-    st.header("📁 Upload Your Data")
-    
-    upload_method = st.radio("Choose data source:", 
-                           ["Upload CSV file", "Use Sample Data", "Enter Data Manually"])
-    
-    if upload_method == "Upload CSV file":
-        uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
-        
-        if uploaded_file is not None:
-            try:
-                df = pd.read_csv(uploaded_file)
-                st.session_state.df = df
-                st.success("✅ Data uploaded successfully!")
-                st.dataframe(df.head(), use_container_width=True)
-                st.write(f"Shape: {df.shape}")
-                st.write("Columns:", df.columns.tolist())
-            except Exception as e:
-                st.error(f"Error loading file: {e}")
-    
-    elif upload_method == "Use Sample Data":
-        if st.button("Load Sample Data"):
-            df = create_sample_data()
-            st.session_state.df = df
-            st.success("✅ Sample data loaded successfully!")
-            st.dataframe(df.head(), use_container_width=True)
-    
-    else:  # Manual data entry
-        st.info("Enter data manually (for testing)")
-        num_rows = st.number_input("Number of students:", min_value=1, max_value=50, value=5)
-        
-        if st.button("Generate Manual Data"):
-            df = create_sample_data().head(num_rows)
-            st.session_state.df = df
-            st.success("✅ Manual data generated!")
-            st.dataframe(df, use_container_width=True)
-
-# Data Analysis page
-elif option == "Data Analysis":
-    st.header("📊 Data Analysis")
-    
-    if st.session_state.df is None:
-        st.warning("Please upload data first from the 'Upload Data' page.")
+def main():
+    if st.session_state.user_type is None:
+        login_page()
     else:
-        df = st.session_state.df
+        if st.session_state.user_type == "Student":
+            student_portal()
+        elif st.session_state.user_type == "College":
+            college_portal()
+        elif st.session_state.user_type == "Company":
+            company_portal()
+
+def login_page():
+    st.markdown('<h1 class="main-header">🎓 Campus Placement AI Platform</h1>', unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        with st.container(border=True):
+            st.subheader("🔐 Login")
+            user_type = st.selectbox(
+                "Select User Type",
+                ["Student", "College", "Company"]
+            )
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("🚀 Login", use_container_width=True, type="primary"):
+                    # Simple demo authentication
+                    if username and password:
+                        st.session_state.user_type = user_type
+                        st.session_state.username = username
+                        st.success(f"Welcome, {username}!")
+                        st.rerun()
+                    else:
+                        st.error("Please enter username and password")
+            
+            with col_b:
+                if st.button("👁️ Demo Login", use_container_width=True):
+                    st.session_state.user_type = "Student"
+                    st.session_state.username = "demo_user"
+                    st.rerun()
+            
+            st.divider()
+            st.caption("Demo Credentials: Any username/password will work")
+
+def student_portal():
+    with st.sidebar:
+        st.image("https://img.icons8.com/color/96/000000/graduation-cap.png", width=80)
+        st.title(f"👋 Welcome, {st.session_state.username}")
         
-        # Show data info
-        st.subheader("Dataset Overview")
+        # Navigation
+        page = st.selectbox(
+            "Navigation",
+            ["Dashboard", "Resume Builder", "Interview Practice", "Career Analytics", "Settings"]
+        )
+        
+        # Quick stats
+        st.divider()
+        st.subheader("📊 Quick Stats")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Profile Score", "85%", "+5")
+        with col2:
+            st.metric("Interviews", "3", "+1")
+        
+        # Logout button
+        st.divider()
+        if st.button("🚪 Logout", use_container_width=True):
+            st.session_state.user_type = None
+            st.session_state.username = None
+            st.rerun()
+    
+    # Main content
+    if page == "Dashboard":
+        show_student_dashboard()
+    elif page == "Resume Builder":
+        show_resume_builder()
+    elif page == "Interview Practice":
+        show_interview_practice()
+    elif page == "Career Analytics":
+        show_career_analytics()
+    elif page == "Settings":
+        show_settings()
+
+def show_student_dashboard():
+    st.title("📈 Student Dashboard")
+    
+    # KPI metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Placement Ready", "85%", "Ready")
+    with col2:
+        st.metric("Resume Score", "88/100", "+8")
+    with col3:
+        st.metric("Skill Match", "92%", "Excellent")
+    with col4:
+        st.metric("Companies Applied", "12", "+3")
+    
+    # Quick actions
+    st.subheader("🚀 Quick Actions")
+    
+    actions = [
+        {"icon": "🤖", "title": "Build Resume", "desc": "Create AI-optimized resume"},
+        {"icon": "🎥", "title": "Mock Interview", "desc": "Practice with AI feedback"},
+        {"icon": "📊", "title": "Career Analysis", "desc": "Get personalized insights"},
+        {"icon": "🎯", "title": "Job Match", "desc": "Find suitable positions"},
+        {"icon": "📚", "title": "Skill Gap", "desc": "Identify skills to learn"},
+        {"icon": "💼", "title": "Apply Now", "desc": "Browse opportunities"}
+    ]
+    
+    cols = st.columns(3)
+    for idx, action in enumerate(actions):
+        with cols[idx % 3]:
+            with st.container(border=True):
+                st.markdown(f"### {action['icon']} {action['title']}")
+                st.write(action['desc'])
+                if st.button(f"Go →", key=f"action_{idx}", use_container_width=True):
+                    st.info(f"Opening {action['title']}...")
+    
+    # Sample data visualization
+    st.subheader("📈 Placement Trends")
+    
+    # Create sample data
+    data = pd.DataFrame({
+        'Month': ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+        'Placements': [45, 52, 48, 60, 75, 82],
+        'Average Salary': [500, 520, 510, 550, 580, 600]
+    })
+    
+    # Display as chart
+    chart_data = pd.DataFrame({
+        'Month': data['Month'],
+        'Placements': data['Placements']
+    })
+    
+    st.bar_chart(chart_data.set_index('Month'))
+    
+    # Recent activity
+    st.subheader("📋 Recent Activity")
+    
+    activities = [
+        {"date": "2024-01-10", "activity": "Resume reviewed by AI", "status": "✅ Completed"},
+        {"date": "2024-01-09", "activity": "Mock interview completed", "status": "✅ Score: 85%"},
+        {"date": "2024-01-08", "activity": "Applied to Google", "status": "⏳ Under Review"},
+        {"date": "2024-01-07", "activity": "Skill assessment test", "status": "✅ Passed"},
+        {"date": "2024-01-06", "activity": "Career counseling session", "status": "✅ Completed"}
+    ]
+    
+    for act in activities:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            st.write(act['date'])
+        with col2:
+            st.write(act['activity'])
+        with col3:
+            st.write(act['status'])
+        st.divider()
+
+def show_resume_builder():
+    st.title("🤖 AI Resume Builder")
+    
+    with st.form("resume_form"):
         col1, col2 = st.columns(2)
         
         with col1:
-            st.write("**Data Shape:**", df.shape)
-            st.write("**Columns:**", df.columns.tolist())
+            name = st.text_input("Full Name*", "John Doe")
+            email = st.text_input("Email*", "john.doe@example.com")
+            phone = st.text_input("Phone", "+91 9876543210")
         
         with col2:
-            st.write("**Data Types:**")
-            st.write(df.dtypes)
+            target_role = st.text_input("Target Role*", "Software Engineer")
+            experience = st.number_input("Years of Experience", 0, 50, 3)
+            current_role = st.text_input("Current Role", "Junior Developer")
         
-        # Show missing values
-        st.subheader("Missing Values")
-        missing_data = df.isnull().sum()
-        if missing_data.sum() == 0:
-            st.success("✅ No missing values found!")
-        else:
-            st.warning("Missing values detected:")
-            st.write(missing_data[missing_data > 0])
+        # Skills
+        st.subheader("Skills")
+        skills = st.text_area(
+            "Enter your skills (comma-separated)",
+            "Python, Java, SQL, React, AWS, Communication, Team Leadership"
+        )
         
-        # Show statistics
-        st.subheader("Statistical Summary")
-        st.write(df.describe())
+        # Experience
+        st.subheader("Work Experience")
+        experience_desc = st.text_area(
+            "Describe your work experience",
+            "• Developed and maintained web applications using React and Node.js\n• Led a team of 5 developers...",
+            height=150
+        )
         
-        # Visualizations
-        st.subheader("Data Visualizations")
+        # Education
+        st.subheader("Education")
+        education = st.text_area(
+            "Education details",
+            "Bachelor of Technology in Computer Science\nUniversity Name, 2022\nGPA: 3.8/4.0"
+        )
         
-        viz_option = st.selectbox("Choose visualization:", 
-                                ["Placement Distribution", "CGPA Distribution", 
-                                 "Feature Correlation", "Department-wise Analysis"])
-        
-        fig, ax = plt.subplots(figsize=(10, 6))
-        
-        if viz_option == "Placement Distribution":
-            placement_counts = df['Placed'].value_counts()
-            ax.pie(placement_counts.values, labels=['Not Placed', 'Placed'], 
-                  autopct='%1.1f%%', colors=['#ff9999', '#66b3ff'])
-            ax.set_title('Placement Distribution')
-        
-        elif viz_option == "CGPA Distribution":
-            ax.hist(df['CGPA'], bins=20, edgecolor='black', alpha=0.7)
-            ax.set_xlabel('CGPA')
-            ax.set_ylabel('Frequency')
-            ax.set_title('CGPA Distribution')
-        
-        elif viz_option == "Feature Correlation":
-            numeric_df = df.select_dtypes(include=[np.number])
-            if not numeric_df.empty:
-                corr_matrix = numeric_df.corr()
-                sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', ax=ax)
-                ax.set_title('Feature Correlation Matrix')
-        
-        elif viz_option == "Department-wise Analysis":
-            if 'Department' in df.columns:
-                dept_placement = df.groupby('Department')['Placed'].mean() * 100
-                dept_placement.plot(kind='bar', ax=ax, color='skyblue')
-                ax.set_xlabel('Department')
-                ax.set_ylabel('Placement Rate (%)')
-                ax.set_title('Department-wise Placement Rates')
-                ax.tick_params(axis='x', rotation=45)
-        
-        st.pyplot(fig)
-
-# Model Training page
-elif option == "Model Training":
-    st.header("🤖 Model Training")
+        # Submit button
+        submitted = st.form_submit_button("✨ Generate AI-Optimized Resume", type="primary")
     
-    if st.session_state.df is None:
-        st.warning("Please upload data first from the 'Upload Data' page.")
-    else:
-        df = st.session_state.df
-        
-        st.subheader("Select Features and Target")
-        
-        # Get numeric columns for features
-        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-        
-        # Remove target from features if it exists
-        if 'Placed' in numeric_cols:
-            numeric_cols.remove('Placed')
-        
-        # Feature selection
-        selected_features = st.multiselect(
-            "Select features for prediction:",
-            numeric_cols,
-            default=numeric_cols[:min(4, len(numeric_cols))]
-        )
-        
-        # Target selection
-        target_col = st.selectbox(
-            "Select target variable (placement status):",
-            df.columns.tolist()
-        )
-        
-        if selected_features and target_col:
-            # Prepare data
-            X = df[selected_features]
-            y = df[target_col]
+    if submitted:
+        if name and email and target_role:
+            st.success("✅ Resume generated successfully!")
             
-            # Encode categorical target if needed
-            if y.dtype == 'object':
-                le = LabelEncoder()
-                y = le.fit_transform(y)
-                st.session_state.encoders[target_col] = le
-                st.info(f"Target encoded: {list(le.classes_)}")
+            # Display resume preview
+            with st.container(border=True):
+                st.subheader("📄 Resume Preview")
+                st.write(f"**Name:** {name}")
+                st.write(f"**Email:** {email}")
+                st.write(f"**Phone:** {phone}")
+                st.write(f"**Target Role:** {target_role}")
+                st.write("\n**Skills:**")
+                st.write(skills)
+                st.write("\n**Experience:**")
+                st.write(experience_desc)
+                st.write("\n**Education:**")
+                st.write(education)
             
-            # Split data
-            test_size = st.slider("Test set size:", 0.1, 0.5, 0.2, 0.05)
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=test_size, random_state=42
+            # Download button
+            resume_text = f"""
+            RESUME - {name}
+            
+            Contact:
+            Email: {email}
+            Phone: {phone}
+            
+            Target Role: {target_role}
+            
+            Skills:
+            {skills}
+            
+            Experience:
+            {experience_desc}
+            
+            Education:
+            {education}
+            """
+            
+            st.download_button(
+                "📥 Download Resume",
+                data=resume_text,
+                file_name=f"{name}_Resume.txt",
+                mime="text/plain"
             )
-            
-            # Model training
-            if st.button("Train Model"):
-                with st.spinner("Training model..."):
-                    # Initialize and train model
-                    model = RandomForestClassifier(n_estimators=100, random_state=42)
-                    model.fit(X_train, y_train)
-                    
-                    # Store model in session state
-                    st.session_state.model = model
-                    
-                    # Calculate accuracy
-                    train_score = model.score(X_train, y_train)
-                    test_score = model.score(X_test, y_test)
-                    
-                    # Display results
-                    st.success("✅ Model trained successfully!")
+        else:
+            st.error("Please fill all required fields (*)")
+
+def show_interview_practice():
+    st.title("🎥 Interview Practice")
+    
+    st.info("Practice your interview skills with AI-powered feedback")
+    
+    # Question categories
+    categories = st.multiselect(
+        "Select question categories:",
+        ["Technical", "Behavioral", "Scenario-based", "Problem Solving", "Leadership"],
+        default=["Technical", "Behavioral"]
+    )
+    
+    # Question display
+    if categories:
+        st.subheader("💬 Practice Questions")
+        
+        questions = [
+            "Tell me about yourself and your background.",
+            "Why are you interested in this role?",
+            "Describe a challenging project you worked on.",
+            "How do you handle tight deadlines?",
+            "What are your strengths and weaknesses?"
+        ]
+        
+        selected_q = st.selectbox("Select a question:", questions)
+        
+        st.write(f"**Question:** {selected_q}")
+        
+        # Answer input
+        answer = st.text_area("Your Answer:", height=200)
+        
+        # Recording buttons
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🎤 Record Audio Answer", use_container_width=True):
+                st.info("Audio recording started...")
+        
+        with col2:
+            if st.button("📹 Record Video Answer", use_container_width=True):
+                st.info("Video recording started...")
+        
+        # Submit for feedback
+        if st.button("📊 Get AI Feedback", type="primary"):
+            if answer.strip():
+                st.success("✅ Analysis complete!")
+                
+                # Display feedback
+                with st.container(border=True):
+                    st.subheader("🤖 AI Feedback")
                     
                     col1, col2 = st.columns(2)
+                    
                     with col1:
-                        st.metric("Training Accuracy", f"{train_score:.2%}")
+                        st.metric("Clarity Score", "85/100")
+                        st.metric("Content Relevance", "90/100")
+                        st.metric("Confidence Level", "78/100")
+                    
                     with col2:
-                        st.metric("Testing Accuracy", f"{test_score:.2%}")
-                    
-                    # Feature importance
-                    st.subheader("Feature Importance")
-                    feature_importance = pd.DataFrame({
-                        'Feature': selected_features,
-                        'Importance': model.feature_importances_
-                    }).sort_values('Importance', ascending=False)
-                    
-                    fig, ax = plt.subplots(figsize=(10, 6))
-                    ax.barh(feature_importance['Feature'], feature_importance['Importance'])
-                    ax.set_xlabel('Importance')
-                    ax.set_title('Feature Importance')
-                    st.pyplot(fig)
-
-# Predictions page
-elif option == "Predictions":
-    st.header("🔮 Make Predictions")
-    
-    if st.session_state.model is None:
-        st.warning("Please train the model first from the 'Model Training' page.")
-    else:
-        model = st.session_state.model
-        df = st.session_state.df
-        
-        st.subheader("Predict for New Student")
-        
-        # Get feature names from model (assuming it's been trained)
-        if hasattr(model, 'feature_names_in_'):
-            feature_names = model.feature_names_in_
-        else:
-            # Get numeric columns from original data
-            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-            if 'Placed' in numeric_cols:
-                numeric_cols.remove('Placed')
-            feature_names = numeric_cols[:model.n_features_in_]
-        
-        # Create input form for each feature
-        input_data = {}
-        cols = st.columns(2)
-        
-        for i, feature in enumerate(feature_names):
-            with cols[i % 2]:
-                if df[feature].dtype in [np.float64, np.int64]:
-                    min_val = float(df[feature].min())
-                    max_val = float(df[feature].max())
-                    default_val = float(df[feature].mean())
-                    input_data[feature] = st.number_input(
-                        feature,
-                        min_value=min_val,
-                        max_value=max_val,
-                        value=default_val
-                    )
-                else:
-                    unique_vals = df[feature].unique()
-                    input_data[feature] = st.selectbox(feature, unique_vals)
-        
-        # Make prediction
-        if st.button("Predict Placement"):
-            # Prepare input for prediction
-            input_df = pd.DataFrame([input_data])
-            
-            # Make prediction
-            prediction = model.predict(input_df)[0]
-            prediction_proba = model.predict_proba(input_df)[0]
-            
-            # Display result
-            st.subheader("Prediction Result")
-            
-            if prediction == 1 or prediction == 'Placed':
-                st.success(f"🎉 **HIGH CHANCE OF PLACEMENT**")
-                st.write(f"Probability: {prediction_proba[1]:.1%}")
+                        st.write("**Strengths:**")
+                        st.success("✓ Good structure and organization")
+                        st.success("✓ Relevant examples provided")
+                        
+                        st.write("**Areas for Improvement:**")
+                        st.warning("⚠️ Could use more specific metrics")
+                        st.warning("⚠️ Consider adding more technical details")
+                
+                # Tips
+                st.subheader("💡 Tips for Improvement")
+                tips = [
+                    "Use the STAR method (Situation, Task, Action, Result)",
+                    "Include specific numbers and metrics",
+                    "Practice maintaining eye contact",
+                    "Keep answers concise (1-2 minutes)",
+                    "Show enthusiasm for the role"
+                ]
+                
+                for tip in tips:
+                    st.write(f"• {tip}")
             else:
-                st.error(f"⚠️ **LOW CHANCE OF PLACEMENT**")
-                st.write(f"Probability: {prediction_proba[0]:.1%}")
-            
-            # Show probability breakdown
-            st.subheader("Probability Breakdown")
-            fig, ax = plt.subplots(figsize=(8, 4))
-            labels = ['Not Placed', 'Placed'] if len(prediction_proba) == 2 else ['Class 0', 'Class 1']
-            ax.bar(labels, prediction_proba, color=['red', 'green'])
-            ax.set_ylabel('Probability')
-            ax.set_title('Placement Probability')
-            ax.set_ylim([0, 1])
-            for i, v in enumerate(prediction_proba):
-                ax.text(i, v + 0.02, f'{v:.1%}', ha='center')
-            st.pyplot(fig)
+                st.error("Please provide an answer before getting feedback")
 
-# About page
-else:  # option == "About"
-    st.header("ℹ️ About This App")
+def show_career_analytics():
+    st.title("📊 Career Analytics")
     
-    st.markdown("""
-    ## Campus Placement Prediction AI
+    st.info("AI-powered insights for your career growth")
     
-    ### 📋 Features:
-    1. **Data Upload & Management** - Upload your own dataset or use sample data
-    2. **Data Analysis** - Explore data with visualizations and statistics
-    3. **Machine Learning** - Train AI models to predict placement outcomes
-    4. **Predictions** - Get real-time predictions for individual students
-    5. **Insights** - Understand key factors affecting placement
+    # Student profile
+    col1, col2 = st.columns(2)
     
-    ### 🎯 Purpose:
-    This tool helps educational institutions and students:
-    - Predict placement chances based on academic performance
-    - Identify areas for improvement
-    - Make data-driven decisions for career preparation
+    with col1:
+        cgpa = st.slider("CGPA", 6.0, 10.0, 8.5, 0.1)
+        projects = st.number_input("Number of Projects", 0, 20, 5)
     
-    ### 🛠️ Technologies Used:
-    - **Streamlit** - Web application framework
-    - **Scikit-learn** - Machine learning library
-    - **Pandas & NumPy** - Data manipulation
-    - **Matplotlib & Seaborn** - Data visualization
+    with col2:
+        internships = st.number_input("Internships", 0, 5, 2)
+        skills = st.slider("Technical Skills Count", 5, 50, 15)
     
-    ### 👨‍💻 How to Use:
-    1. Upload your student data or use sample data
-    2. Explore the data through analysis visualizations
-    3. Train a machine learning model
-    4. Make predictions for individual students
-    5. Use insights to improve placement strategies
-    
-    ---
-    
-    *For educational purposes only. Predictions are based on historical data patterns.*
-    """)
-    
-    st.info("💡 **Tip**: Start by uploading your data or using the sample data to explore the app's features.")
+    # Analyze button
+    if st.button("🔍 Analyze Career Prospects", type="primary"):
+        # Calculate scores
+        base_score = 50
+        cgpa_score = (cgpa - 6.0) * 10
+        projects_score = projects * 5
+        internships_score = internships * 15
+        skills_score = skills * 2
+        
+        total_score = min(base_score + cgpa_score + projects_score + internships_score + skills_score, 95)
+        
+        # Display results
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric("Placement Probability", f"{total_score}%")
+        
+        with col2:
+            expected_salary = round(4.0 + (cgpa - 6.0) * 1.5 + internships * 0.8, 1)
+            st.metric("Expected Salary", f"₹{expected_salary}L PA")
+        
+        with col3:
+            readiness = "High" if total_score >= 80 else "Medium" if total_score >= 60 else "Low"
+            st.metric("Readiness Level", readiness)
+        
+        # Recommendations
+        st.subheader("🎯 Personalized Recommendations")
+        
+        recommendations = []
+        
+        if cgpa < 7.5:
+            recommendations.append("Improve CGPA to at least 7.5")
+        
+        if projects < 3:
+            recommendations.append("Complete at least 3 quality projects")
+        
+        if internships == 0:
+            recommendations.append("Secure at least one internship")
+        
+        if skills < 10:
+            recommendations.append("Learn 5 additional technical skills")
+        
+        if recommendations:
+            for rec in recommendations:
+                st.warning(f"⚠️ {rec}")
+        else:
+            st.success("✅ Your profile is strong for placements!")
+        
+        # Skill demand visualization
+        st.subheader("📈 In-Demand Skills")
+        
+        skill_data = pd.DataFrame({
+            'Skill': ['Python', 'Java', 'React', 'AWS', 'SQL', 'Machine Learning'],
+            'Demand': [95, 85, 90, 88, 92, 96],
+            'Salary Impact': [1.5, 1.2, 1.4, 1.6, 1.3, 1.8]
+        })
+        
+        st.bar_chart(skill_data.set_index('Skill')['Demand'])
 
-# Footer
-st.markdown("---")
-st.caption("Developed with ❤️ for Campus Placement Prediction | AI-Powered Insights")
+def show_settings():
+    st.title("⚙️ Settings")
+    
+    with st.form("settings_form"):
+        st.subheader("Profile Settings")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            display_name = st.text_input("Display Name", st.session_state.username)
+            email = st.text_input("Email", "student@example.com")
+        
+        with col2:
+            phone = st.text_input("Phone", "+91 9876543210")
+            department = st.selectbox("Department", ["CSE", "ECE", "ME", "CE", "IT"])
+        
+        st.subheader("Notification Preferences")
+        
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            email_notifications = st.checkbox("Email Notifications", True)
+            job_alerts = st.checkbox("Job Alerts", True)
+        
+        with col4:
+            interview_updates = st.checkbox("Interview Updates", True)
+            newsletter = st.checkbox("Newsletter", False)
+        
+        # Save button
+        if st.form_submit_button("💾 Save Settings", type="primary"):
+            st.success("Settings saved successfully!")
+
+def college_portal():
+    with st.sidebar:
+        st.image("https://img.icons8.com/color/96/000000/school.png", width=80)
+        st.title(f"🏫 College Admin")
+        
+        page = st.selectbox(
+            "Navigation",
+            ["Dashboard", "Placement Analytics", "Student Management", "Company Relations", "Reports"]
+        )
+        
+        st.divider()
+        st.subheader("🏫 College Stats")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Students", "1250", "+5%")
+        with col2:
+            st.metric("Placement", "78%", "+3.2%")
+        
+        st.divider()
+        if st.button("🚪 Logout", use_container_width=True):
+            st.session_state.user_type = None
+            st.session_state.username = None
+            st.rerun()
+    
+    if page == "Dashboard":
+        show_college_dashboard()
+    else:
+        st.title(f"🏫 {page}")
+        st.info(f"{page} module will be implemented in Phase 2")
+
+def show_college_dashboard():
+    st.title("🏫 College Admin Dashboard")
+    
+    # KPI metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Students", "1250", "+5%")
+    with col2:
+        st.metric("Placement Rate", "78%", "+3.2%")
+    with col3:
+        st.metric("Avg Salary", "₹6.5L", "+12%")
+    with col4:
+        st.metric("Companies", "85", "+8")
+    
+    # Placement trend
+    st.subheader("📈 Placement Trend")
+    
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    placements = [45, 52, 48, 60, 75, 82, 65, 70, 85, 90, 95, 100]
+    
+    trend_data = pd.DataFrame({
+        'Month': months,
+        'Placements': placements
+    })
+    
+    st.line_chart(trend_data.set_index('Month'))
+    
+    # Department-wise performance
+    st.subheader("📊 Department Performance")
+    
+    dept_data = pd.DataFrame({
+        'Department': ['CSE', 'ECE', 'ME', 'CE', 'IT'],
+        'Placements': [85, 65, 45, 40, 60],
+        'Avg Salary': [9.5, 6.8, 5.5, 5.2, 7.2]
+    })
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.bar_chart(dept_data.set_index('Department')['Placements'])
+    
+    with col2:
+        st.bar_chart(dept_data.set_index('Department')['Avg Salary'])
+
+def company_portal():
+    with st.sidebar:
+        st.image("https://img.icons8.com/color/96/000000/business.png", width=80)
+        st.title(f"🏢 HR Manager")
+        
+        page = st.selectbox(
+            "Navigation",
+            ["Dashboard", "Job Postings", "Candidate Search", "Interview Schedule", "Analytics"]
+        )
+        
+        st.divider()
+        st.subheader("🏢 Company Stats")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Openings", "15", "-2")
+        with col2:
+            st.metric("Hires", "12", "+3")
+        
+        st.divider()
+        if st.button("🚪 Logout", use_container_width=True):
+            st.session_state.user_type = None
+            st.session_state.username = None
+            st.rerun()
+    
+    if page == "Dashboard":
+        show_company_dashboard()
+    else:
+        st.title(f"🏢 {page}")
+        st.info(f"{page} module will be implemented in Phase 3")
+
+def show_company_dashboard():
+    st.title("🏢 Company HR Dashboard")
+    
+    # Company metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Open Positions", "15", "-2")
+    with col2:
+        st.metric("Applications", "342", "+45")
+    with col3:
+        st.metric("Interviews", "28", "+8")
+    with col4:
+        st.metric("Hires", "12", "+3")
+    
+    # Application trend
+    st.subheader("📈 Application Trend")
+    
+    days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    applications = [45, 52, 48, 60, 75, 30, 12]
+    
+    app_data = pd.DataFrame({
+        'Day': days,
+        'Applications': applications
+    })
+    
+    st.area_chart(app_data.set_index('Day'))
+    
+    # Top skills in applications
+    st.subheader("🛠️ Top Skills in Applications")
+    
+    skills_data = pd.DataFrame({
+        'Skill': ['Python', 'Java', 'React', 'AWS', 'SQL'],
+        'Count': [250, 180, 220, 150, 300]
+    })
+    
+    st.bar_chart(skills_data.set_index('Skill'))
+
+if __name__ == "__main__":
+    main()
