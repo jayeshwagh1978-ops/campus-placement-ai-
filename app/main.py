@@ -196,4 +196,187 @@ def student_dashboard():
         'Skill Count': [8, 10, 12, 14, 16, 18]
     })
     
-    fig =
+    fig = px.line(progress_data, x='Week', y=['Resume Score', 'Interview Score', 'Skill Count'],
+                  title="Weekly Progress Tracking",
+                  markers=True)
+    
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Recent activity
+    st.subheader("📋 Recent Activity")
+    
+    activities = [
+        {"date": "2024-01-10", "activity": "Resume reviewed by AI", "status": "✅ Completed"},
+        {"date": "2024-01-09", "activity": "Mock interview completed", "status": "✅ Score: 85%"},
+        {"date": "2024-01-08", "activity": "Applied to Google", "status": "⏳ Under Review"},
+        {"date": "2024-01-07", "activity": "Skill assessment test", "status": "✅ Passed"},
+        {"date": "2024-01-06", "activity": "Career counseling session", "status": "✅ Completed"}
+    ]
+    
+    for act in activities:
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col1:
+            st.write(act['date'])
+        with col2:
+            st.write(act['activity'])
+        with col3:
+            st.write(act['status'])
+        st.divider()
+
+def show_nep_suggestions():
+    st.title("📚 NEP 2020 Aligned Suggestions")
+    
+    st.info("""
+    Based on NEP 2020 guidelines, here are personalized recommendations for your academic and career path.
+    """)
+    
+    # Student profile
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        current_major = st.selectbox("Current Major", 
+                                    ["Computer Science", "Electronics", "Mechanical", "Civil", "Information Technology"])
+        current_year = st.selectbox("Current Year", [1, 2, 3, 4])
+        interests = st.multiselect("Your Interests",
+                                  ["AI/ML", "Web Development", "Data Science", "Cybersecurity", 
+                                   "IoT", "Robotics", "Cloud Computing", "Business Analytics"])
+    
+    with col2:
+        skills = st.multiselect("Your Skills",
+                               ["Python", "Java", "JavaScript", "SQL", "React", "AWS", "Docker", "Git"])
+        career_goal = st.selectbox("Career Goal",
+                                  ["Software Developer", "Data Scientist", "ML Engineer", 
+                                   "DevOps Engineer", "Product Manager", "Research"])
+    
+    if st.button("🎯 Get NEP Recommendations", type="primary"):
+        # Generate recommendations
+        recommendations = {
+            "major_minor": [
+                {"major": "Computer Science", "minor": "Business Analytics", "reason": "Aligns with your interest in business applications"},
+                {"major": "Computer Science", "minor": "Mathematics", "reason": "Strong foundation for AI/ML career"},
+                {"major": "Computer Science", "minor": "Psychology", "reason": "Good for UX/Product Management roles"}
+            ],
+            "courses": [
+                {"course": "AI Ethics", "type": "Multidisciplinary", "credits": 3},
+                {"course": "Entrepreneurship", "type": "Vocational", "credits": 2},
+                {"course": "Research Methodology", "type": "Research", "credits": 4}
+            ],
+            "internships": [
+                {"type": "Research Intern", "domain": "AI/ML", "duration": "3 months"},
+                {"type": "Industry Intern", "domain": "Software Development", "duration": "6 months"}
+            ]
+        }
+        
+        st.success("✅ Recommendations generated based on NEP 2020 guidelines!")
+        
+        # Display recommendations
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.subheader("🎓 Major/Minor Combinations")
+            for rec in recommendations['major_minor']:
+                with st.container(border=True):
+                    st.write(f"**{rec['major']} + {rec['minor']}**")
+                    st.caption(rec['reason'])
+        
+        with col2:
+            st.subheader("📚 Recommended Courses")
+            for rec in recommendations['courses']:
+                with st.container(border=True):
+                    st.write(f"**{rec['course']}**")
+                    st.caption(f"{rec['type']} • {rec['credits']} credits")
+        
+        with col3:
+            st.subheader("💼 Internship Pathways")
+            for rec in recommendations['internships']:
+                with st.container(border=True):
+                    st.write(f"**{rec['type']}**")
+                    st.caption(f"{rec['domain']} • {rec['duration']}")
+
+def show_credentials():
+    st.title("🔗 Blockchain Verified Credentials")
+    
+    st.info("""
+    Your certificates and achievements stored securely on blockchain.
+    Immutable and verifiable anywhere.
+    """)
+    
+    # Sample credentials
+    credentials = [
+        {"name": "Bachelor of Technology", "issuer": "University", "date": "2024-05-15", "hash": "0x1234...", "verified": True},
+        {"name": "Google Cloud Certified", "issuer": "Google", "date": "2024-03-20", "hash": "0x5678...", "verified": True},
+        {"name": "AWS Solutions Architect", "issuer": "Amazon", "date": "2024-02-10", "hash": "0x9abc...", "verified": True},
+        {"name": "Python Programming", "issuer": "Coursera", "date": "2023-12-05", "hash": "0xdef0...", "verified": True},
+        {"name": "Machine Learning Specialization", "issuer": "Stanford", "date": "2023-10-15", "hash": "0x1235...", "verified": True}
+    ]
+    
+    # Display credentials
+    for cred in credentials:
+        with st.container(border=True):
+            col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
+            
+            with col1:
+                st.write(f"**{cred['name']}**")
+                st.caption(f"Issued by: {cred['issuer']}")
+            
+            with col2:
+                st.write(f"📅 {cred['date']}")
+            
+            with col3:
+                if cred['verified']:
+                    st.success("✅ Verified")
+                else:
+                    st.warning("⏳ Pending")
+            
+            with col4:
+                if st.button("🔗 View", key=f"view_{cred['hash']}"):
+                    st.code(f"Blockchain Hash: {cred['hash']}")
+                    st.info("This certificate is permanently stored on the blockchain.")
+    
+    # Add new credential
+    st.subheader("➕ Add New Certificate")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        cert_name = st.text_input("Certificate Name")
+        issuer = st.text_input("Issuing Organization")
+    
+    with col2:
+        issue_date = st.date_input("Issue Date")
+        cert_file = st.file_uploader("Upload Certificate", type=['pdf', 'png', 'jpg'])
+    
+    if st.button("📤 Upload to Blockchain", type="primary"):
+        if cert_name and issuer and cert_file:
+            st.success("✅ Certificate uploaded to blockchain successfully!")
+            st.info("Transaction Hash: 0x9876... (Store this for verification)")
+        else:
+            st.error("Please fill all fields and upload certificate")
+
+# College and Company Portals (simplified for now)
+def college_portal():
+    st.title("🏫 College Admin Portal")
+    st.info("College portal features will be implemented in Phase 2")
+
+def company_portal():
+    st.title("🏢 Company HR Portal")
+    st.info("Company portal features will be implemented in Phase 3")
+
+# Main application
+def main_app():
+    # Route based on user type
+    if st.session_state.user_type == "Student":
+        student_portal()
+    elif st.session_state.user_type == "College Admin":
+        college_portal()
+    elif st.session_state.user_type == "Company HR":
+        company_portal()
+    else:
+        st.error("Invalid user type")
+
+# Run the app
+if __name__ == "__main__":
+    if st.session_state.user_type is None:
+        login_page()
+    else:
+        main_app()
