@@ -1,1 +1,14 @@
+# Create virtual environment
+python3.11 -m venv venv
 
+# Activate it
+# On Mac/Linux:
+source venv/bin/activate
+# On Windows:
+venv\Scripts\activate
+
+# Install requirements
+pip install -r requirements-minimal.txt
+
+# Run the app
+streamlit run app/main.py
