@@ -1,12 +1,17 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
-import pandas as pd
 import plotly.express as px
+import pandas as pd
 
 # Import modules
+from auth import init_session_state, login_form, logout, require_auth, get_current_user_type
 from ai_modules.resume_builder import show_resume_builder
 from student_portal.video_interview import show_interview_simulator
 from ai_modules.predictive_analytics import show_predictive_analytics
+from college_portal.nep_compliance import show_nep_compliance
+from college_portal.placement_dashboard import show_placement_dashboard
+from company_portal.job_parser import show_job_parser
+from company_portal.talent_heatmap import show_talent_heatmap
 
 # Page configuration
 st.set_page_config(
@@ -50,67 +55,34 @@ st.markdown("""
         padding: 20px;
         text-align: center;
     }
+    .stButton button {
+        width: 100%;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# Session state initialization
-if 'user_type' not in st.session_state:
-    st.session_state.user_type = None
-if 'username' not in st.session_state:
-    st.session_state.username = None
-
-# Authentication function
-def authenticate_user(username, password, user_type):
-    # Simple authentication for demo
-    return username and password
-
-# Login page
-def login_page():
-    st.markdown('<h1 class="main-header">🎓 Campus Placement AI Platform</h1>', unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        with st.container(border=True):
-            st.subheader("🔐 Login")
-            user_type = st.selectbox(
-                "Select User Type",
-                ["Student", "College Admin", "Company HR", "Admin"]
-            )
-            username = st.text_input("Username/Email")
-            password = st.text_input("Password", type="password")
-            
-            col_a, col_b = st.columns(2)
-            with col_a:
-                if st.button("🚀 Login", use_container_width=True, type="primary"):
-                    if authenticate_user(username, password, user_type):
-                        st.session_state.user_type = user_type
-                        st.session_state.username = username
-                        st.rerun()
-                    else:
-                        st.error("Invalid credentials")
-            
-            with col_b:
-                if st.button("👁️ Demo Login", use_container_width=True):
-                    st.session_state.user_type = "Student"
-                    st.session_state.username = "demo_user"
-                    st.rerun()
-            
-            st.divider()
-            st.caption("Don't have an account? Contact your institution administrator.")
+# Initialize session state
+init_session_state()
 
 # Student Portal
+@require_auth()
 def student_portal():
+    user_type = get_current_user_type()
+    if user_type != "student":
+        st.error("Access denied. This portal is for students only.")
+        return
+    
     # Sidebar navigation
     with st.sidebar:
         st.image("https://img.icons8.com/color/96/000000/graduation-cap.png", width=80)
-        st.title(f"👋 Welcome, {st.session_state.username}")
+        st.title(f"👋 Welcome, Student")
         
         # Navigation menu
         selected = option_menu(
             menu_title="Student Portal",
             options=["Dashboard", "AI Resume Builder", "Interview Simulator", 
-                    "Career Analytics", "NEP Suggestions", "Credentials"],
-            icons=["house", "file-text", "camera-video", "graph-up", "book", "shield-check"],
+                    "Career Analytics", "NEP Suggestions", "Credentials", "Job Search"],
+            icons=["house", "file-text", "camera-video", "graph-up", "book", "shield-check", "search"],
             menu_icon="person",
             default_index=0,
             styles={
@@ -130,10 +102,10 @@ def student_portal():
         with col2:
             st.metric("Interviews", "3", "+1")
         
-        # AI Assistant
+        # Logout button
         st.divider()
-        if st.button("🤖 AI Assistant", use_container_width=True):
-            st.session_state.show_chatbot = True
+        if st.button("🚪 Logout", use_container_width=True):
+            logout()
     
     # Main content based on selection
     if selected == "Dashboard":
@@ -148,7 +120,124 @@ def student_portal():
         show_nep_suggestions()
     elif selected == "Credentials":
         show_credentials()
+    elif selected == "Job Search":
+        show_job_search()
 
+# College Portal
+@require_auth()
+def college_portal():
+    user_type = get_current_user_type()
+    if user_type != "college":
+        st.error("Access denied. This portal is for college administrators only.")
+        return
+    
+    # Sidebar navigation
+    with st.sidebar:
+        st.image("https://img.icons8.com/color/96/000000/school.png", width=80)
+        st.title(f"🏫 College Admin")
+        
+        # Navigation menu
+        selected = option_menu(
+            menu_title="College Portal",
+            options=["Dashboard", "NEP Compliance", "Placement Analytics", 
+                    "Student Management", "Company Relations", "Reports"],
+            icons=["house", "check-circle", "bar-chart", "people", "building", "file-text"],
+            menu_icon="building",
+            default_index=0,
+            styles={
+                "container": {"padding": "5px", "background-color": "#f8f9fa"},
+                "icon": {"color": "#3B82F6", "font-size": "20px"},
+                "nav-link": {"font-size": "16px", "text-align": "left", "margin": "5px"},
+                "nav-link-selected": {"background-color": "#3B82F6", "color": "white"},
+            }
+        )
+        
+        # College stats
+        st.divider()
+        st.subheader("🏫 College Stats")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Students", "1250", "+5%")
+        with col2:
+            st.metric("Placement", "78%", "+3.2%")
+        
+        # Logout button
+        st.divider()
+        if st.button("🚪 Logout", use_container_width=True):
+            logout()
+    
+    # Main content based on selection
+    if selected == "Dashboard":
+        college_dashboard()
+    elif selected == "NEP Compliance":
+        show_nep_compliance()
+    elif selected == "Placement Analytics":
+        show_placement_dashboard()
+    elif selected == "Student Management":
+        show_student_management()
+    elif selected == "Company Relations":
+        show_company_relations()
+    elif selected == "Reports":
+        show_reports()
+
+# Company Portal
+@require_auth()
+def company_portal():
+    user_type = get_current_user_type()
+    if user_type != "company":
+        st.error("Access denied. This portal is for company HR only.")
+        return
+    
+    # Sidebar navigation
+    with st.sidebar:
+        st.image("https://img.icons8.com/color/96/000000/business.png", width=80)
+        st.title(f"🏢 HR Manager")
+        
+        # Navigation menu
+        selected = option_menu(
+            menu_title="Company Portal",
+            options=["Dashboard", "Job Parser", "Talent Heatmap", 
+                    "Candidate Search", "Interview Management", "Analytics"],
+            icons=["house", "search", "map", "people", "calendar", "graph-up"],
+            menu_icon="briefcase",
+            default_index=0,
+            styles={
+                "container": {"padding": "5px", "background-color": "#f8f9fa"},
+                "icon": {"color": "#3B82F6", "font-size": "20px"},
+                "nav-link": {"font-size": "16px", "text-align": "left", "margin": "5px"},
+                "nav-link-selected": {"background-color": "#3B82F6", "color": "white"},
+            }
+        )
+        
+        # Company stats
+        st.divider()
+        st.subheader("🏢 Company Stats")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Openings", "15", "-2")
+        with col2:
+            st.metric("Hires", "12", "+3")
+        
+        # Logout button
+        st.divider()
+        if st.button("🚪 Logout", use_container_width=True):
+            logout()
+    
+    # Main content based on selection
+    if selected == "Dashboard":
+        company_dashboard()
+    elif selected == "Job Parser":
+        show_job_parser()
+    elif selected == "Talent Heatmap":
+        show_talent_heatmap()
+    elif selected == "Candidate Search":
+        show_candidate_search()
+    elif selected == "Interview Management":
+        show_interview_management()
+    elif selected == "Analytics":
+        show_company_analytics()
+
+# Dashboard functions (simplified versions)
 def student_dashboard():
     st.title("📈 Student Dashboard")
     
@@ -167,12 +256,12 @@ def student_dashboard():
     st.subheader("🚀 Quick Actions")
     
     actions = [
-        {"icon": "🤖", "title": "Build Resume", "desc": "Create AI-optimized resume", "action": "resume"},
-        {"icon": "🎥", "title": "Mock Interview", "desc": "Practice with AI feedback", "action": "interview"},
-        {"icon": "📊", "title": "Career Analysis", "desc": "Get personalized insights", "action": "analytics"},
-        {"icon": "🎯", "title": "Job Match", "desc": "Find suitable positions", "action": "jobs"},
-        {"icon": "📚", "title": "Skill Gap", "desc": "Identify skills to learn", "action": "skills"},
-        {"icon": "💼", "title": "Apply Now", "desc": "Browse opportunities", "action": "apply"}
+        {"icon": "🤖", "title": "Build Resume", "desc": "Create AI-optimized resume"},
+        {"icon": "🎥", "title": "Mock Interview", "desc": "Practice with AI feedback"},
+        {"icon": "📊", "title": "Career Analysis", "desc": "Get personalized insights"},
+        {"icon": "🎯", "title": "Job Match", "desc": "Find suitable positions"},
+        {"icon": "📚", "title": "Skill Gap", "desc": "Identify skills to learn"},
+        {"icon": "💼", "title": "Apply Now", "desc": "Browse opportunities"}
     ]
     
     cols = st.columns(3)
@@ -181,202 +270,131 @@ def student_dashboard():
             with st.container(border=True):
                 st.markdown(f"### {action['icon']} {action['title']}")
                 st.write(action['desc'])
-                if st.button(f"Go →", key=f"action_{idx}", use_container_width=True):
-                    if action['action'] == 'resume':
-                        st.session_state.menu_option = "AI Resume Builder"
-                        st.rerun()
+                if st.button("Go →", key=f"action_{idx}", use_container_width=True):
+                    st.info(f"Opening {action['title']}...")
+
+def college_dashboard():
+    st.title("🏫 College Admin Dashboard")
     
-    # Progress tracking
-    st.subheader("📈 Your Progress")
+    # KPI metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Students", "1250", "+5%")
+    with col2:
+        st.metric("Placement Rate", "78%", "+3.2%")
+    with col3:
+        st.metric("Avg Salary", "₹6.5L", "+12%")
+    with col4:
+        st.metric("Companies", "85", "+8")
     
-    progress_data = pd.DataFrame({
-        'Week': ['W1', 'W2', 'W3', 'W4', 'W5', 'W6'],
-        'Resume Score': [65, 70, 75, 80, 85, 88],
-        'Interview Score': [60, 65, 70, 75, 80, 82],
-        'Skill Count': [8, 10, 12, 14, 16, 18]
-    })
+    # Quick actions
+    st.subheader("⚡ Quick Actions")
     
-    fig = px.line(progress_data, x='Week', y=['Resume Score', 'Interview Score', 'Skill Count'],
-                  title="Weekly Progress Tracking",
-                  markers=True)
-    
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Recent activity
-    st.subheader("📋 Recent Activity")
-    
-    activities = [
-        {"date": "2024-01-10", "activity": "Resume reviewed by AI", "status": "✅ Completed"},
-        {"date": "2024-01-09", "activity": "Mock interview completed", "status": "✅ Score: 85%"},
-        {"date": "2024-01-08", "activity": "Applied to Google", "status": "⏳ Under Review"},
-        {"date": "2024-01-07", "activity": "Skill assessment test", "status": "✅ Passed"},
-        {"date": "2024-01-06", "activity": "Career counseling session", "status": "✅ Completed"}
+    actions = [
+        {"title": "NEP Compliance", "desc": "Check NEP 2020 alignment"},
+        {"title": "Placement Dashboard", "desc": "Real-time analytics"},
+        {"title": "Student Management", "desc": "Manage student profiles"},
+        {"title": "Company Relations", "desc": "Partner with companies"},
+        {"title": "Generate Reports", "desc": "Create detailed reports"},
+        {"title": "AR Campus Tour", "desc": "Virtual campus experience"}
     ]
     
-    for act in activities:
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col1:
-            st.write(act['date'])
-        with col2:
-            st.write(act['activity'])
-        with col3:
-            st.write(act['status'])
-        st.divider()
+    cols = st.columns(3)
+    for idx, action in enumerate(actions):
+        with cols[idx % 3]:
+            with st.container(border=True):
+                st.markdown(f"### {action['title']}")
+                st.write(action['desc'])
+                if st.button("Manage", key=f"col_action_{idx}", use_container_width=True):
+                    st.info(f"Opening {action['title']}...")
 
-def show_nep_suggestions():
-    st.title("📚 NEP 2020 Aligned Suggestions")
+def company_dashboard():
+    st.title("🏢 Company HR Dashboard")
     
-    st.info("""
-    Based on NEP 2020 guidelines, here are personalized recommendations for your academic and career path.
-    """)
-    
-    # Student profile
-    col1, col2 = st.columns(2)
-    
+    # Company metrics
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        current_major = st.selectbox("Current Major", 
-                                    ["Computer Science", "Electronics", "Mechanical", "Civil", "Information Technology"])
-        current_year = st.selectbox("Current Year", [1, 2, 3, 4])
-        interests = st.multiselect("Your Interests",
-                                  ["AI/ML", "Web Development", "Data Science", "Cybersecurity", 
-                                   "IoT", "Robotics", "Cloud Computing", "Business Analytics"])
-    
+        st.metric("Open Positions", "15", "-2")
     with col2:
-        skills = st.multiselect("Your Skills",
-                               ["Python", "Java", "JavaScript", "SQL", "React", "AWS", "Docker", "Git"])
-        career_goal = st.selectbox("Career Goal",
-                                  ["Software Developer", "Data Scientist", "ML Engineer", 
-                                   "DevOps Engineer", "Product Manager", "Research"])
+        st.metric("Applications", "342", "+45")
+    with col3:
+        st.metric("Interviews", "28", "+8")
+    with col4:
+        st.metric("Hires", "12", "+3")
     
-    if st.button("🎯 Get NEP Recommendations", type="primary"):
-        # Generate recommendations
-        recommendations = {
-            "major_minor": [
-                {"major": "Computer Science", "minor": "Business Analytics", "reason": "Aligns with your interest in business applications"},
-                {"major": "Computer Science", "minor": "Mathematics", "reason": "Strong foundation for AI/ML career"},
-                {"major": "Computer Science", "minor": "Psychology", "reason": "Good for UX/Product Management roles"}
-            ],
-            "courses": [
-                {"course": "AI Ethics", "type": "Multidisciplinary", "credits": 3},
-                {"course": "Entrepreneurship", "type": "Vocational", "credits": 2},
-                {"course": "Research Methodology", "type": "Research", "credits": 4}
-            ],
-            "internships": [
-                {"type": "Research Intern", "domain": "AI/ML", "duration": "3 months"},
-                {"type": "Industry Intern", "domain": "Software Development", "duration": "6 months"}
-            ]
-        }
-        
-        st.success("✅ Recommendations generated based on NEP 2020 guidelines!")
-        
-        # Display recommendations
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.subheader("🎓 Major/Minor Combinations")
-            for rec in recommendations['major_minor']:
-                with st.container(border=True):
-                    st.write(f"**{rec['major']} + {rec['minor']}**")
-                    st.caption(rec['reason'])
-        
-        with col2:
-            st.subheader("📚 Recommended Courses")
-            for rec in recommendations['courses']:
-                with st.container(border=True):
-                    st.write(f"**{rec['course']}**")
-                    st.caption(f"{rec['type']} • {rec['credits']} credits")
-        
-        with col3:
-            st.subheader("💼 Internship Pathways")
-            for rec in recommendations['internships']:
-                with st.container(border=True):
-                    st.write(f"**{rec['type']}**")
-                    st.caption(f"{rec['domain']} • {rec['duration']}")
+    # Quick actions
+    st.subheader("⚡ Quick Actions")
+    
+    actions = [
+        {"title": "Post New Job", "desc": "Create job opening"},
+        {"title": "Talent Search", "desc": "Find candidates"},
+        {"title": "Schedule Interviews", "desc": "Manage interviews"},
+        {"title": "Analytics", "desc": "View hiring metrics"},
+        {"title": "Campus Drives", "desc": "Plan campus visits"},
+        {"title": "Reports", "desc": "Generate reports"}
+    ]
+    
+    cols = st.columns(3)
+    for idx, action in enumerate(actions):
+        with cols[idx % 3]:
+            with st.container(border=True):
+                st.markdown(f"### {action['title']}")
+                st.write(action['desc'])
+                if st.button("Go", key=f"comp_action_{idx}", use_container_width=True):
+                    st.info(f"Opening {action['title']}...")
+
+# Placeholder functions for other menu items
+def show_nep_suggestions():
+    st.title("📚 NEP 2020 Suggestions")
+    st.info("NEP suggestions module will be implemented here")
 
 def show_credentials():
-    st.title("🔗 Blockchain Verified Credentials")
-    
-    st.info("""
-    Your certificates and achievements stored securely on blockchain.
-    Immutable and verifiable anywhere.
-    """)
-    
-    # Sample credentials
-    credentials = [
-        {"name": "Bachelor of Technology", "issuer": "University", "date": "2024-05-15", "hash": "0x1234...", "verified": True},
-        {"name": "Google Cloud Certified", "issuer": "Google", "date": "2024-03-20", "hash": "0x5678...", "verified": True},
-        {"name": "AWS Solutions Architect", "issuer": "Amazon", "date": "2024-02-10", "hash": "0x9abc...", "verified": True},
-        {"name": "Python Programming", "issuer": "Coursera", "date": "2023-12-05", "hash": "0xdef0...", "verified": True},
-        {"name": "Machine Learning Specialization", "issuer": "Stanford", "date": "2023-10-15", "hash": "0x1235...", "verified": True}
-    ]
-    
-    # Display credentials
-    for cred in credentials:
-        with st.container(border=True):
-            col1, col2, col3, col4 = st.columns([3, 2, 1, 1])
-            
-            with col1:
-                st.write(f"**{cred['name']}**")
-                st.caption(f"Issued by: {cred['issuer']}")
-            
-            with col2:
-                st.write(f"📅 {cred['date']}")
-            
-            with col3:
-                if cred['verified']:
-                    st.success("✅ Verified")
-                else:
-                    st.warning("⏳ Pending")
-            
-            with col4:
-                if st.button("🔗 View", key=f"view_{cred['hash']}"):
-                    st.code(f"Blockchain Hash: {cred['hash']}")
-                    st.info("This certificate is permanently stored on the blockchain.")
-    
-    # Add new credential
-    st.subheader("➕ Add New Certificate")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        cert_name = st.text_input("Certificate Name")
-        issuer = st.text_input("Issuing Organization")
-    
-    with col2:
-        issue_date = st.date_input("Issue Date")
-        cert_file = st.file_uploader("Upload Certificate", type=['pdf', 'png', 'jpg'])
-    
-    if st.button("📤 Upload to Blockchain", type="primary"):
-        if cert_name and issuer and cert_file:
-            st.success("✅ Certificate uploaded to blockchain successfully!")
-            st.info("Transaction Hash: 0x9876... (Store this for verification)")
-        else:
-            st.error("Please fill all fields and upload certificate")
+    st.title("🔗 Blockchain Credentials")
+    st.info("Blockchain credentials module will be implemented here")
 
-# College and Company Portals (simplified for now)
-def college_portal():
-    st.title("🏫 College Admin Portal")
-    st.info("College portal features will be implemented in Phase 2")
+def show_job_search():
+    st.title("🔍 Job Search")
+    st.info("Job search module will be implemented here")
 
-def company_portal():
-    st.title("🏢 Company HR Portal")
-    st.info("Company portal features will be implemented in Phase 3")
+def show_student_management():
+    st.title("👥 Student Management")
+    st.info("Student management module will be implemented here")
+
+def show_company_relations():
+    st.title("🤝 Company Relations")
+    st.info("Company relations module will be implemented here")
+
+def show_reports():
+    st.title("📊 Reports")
+    st.info("Reports module will be implemented here")
+
+def show_candidate_search():
+    st.title("👨‍🎓 Candidate Search")
+    st.info("Candidate search module will be implemented here")
+
+def show_interview_management():
+    st.title("📅 Interview Management")
+    st.info("Interview management module will be implemented here")
+
+def show_company_analytics():
+    st.title("📈 Company Analytics")
+    st.info("Company analytics module will be implemented here")
 
 # Main application
-def main_app():
-    # Route based on user type
-    if st.session_state.user_type == "Student":
-        student_portal()
-    elif st.session_state.user_type == "College Admin":
-        college_portal()
-    elif st.session_state.user_type == "Company HR":
-        company_portal()
+def main():
+    if not st.session_state.authenticated:
+        login_form()
     else:
-        st.error("Invalid user type")
+        user_type = get_current_user_type()
+        
+        if user_type == "student":
+            student_portal()
+        elif user_type == "college":
+            college_portal()
+        elif user_type == "company":
+            company_portal()
+        else:
+            st.error("Unknown user type. Please contact administrator.")
 
-# Run the app
 if __name__ == "__main__":
-    if st.session_state.user_type is None:
-        login_page()
-    else:
-        main_app()
+    main()
