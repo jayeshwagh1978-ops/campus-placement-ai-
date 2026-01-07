@@ -1,1 +1,38 @@
+version: '3.8'
 
+services:
+  web:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@db:5432/campus_placement
+      - SECRET_KEY=your-secret-key-change-in-production
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - db
+    restart: unless-stopped
+    networks:
+      - campus-network
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=campus_placement
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - campus-network
+
+volumes:
+  postgres_data:
+
+networks:
+  campus-network:
+    driver: bridge
