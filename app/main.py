@@ -1,19 +1,19 @@
 import streamlit as st
 
-st.title("🎓 Campus Placement AI")
-st.success("✅ App deployed successfully!")
+# Simple app that definitely works
+st.set_page_config(page_title="Campus Placement", layout="wide")
+st.title("Campus Placement AI - TEST")
+st.write("This is a test app to stop the restart loop.")
 
-# Simple test
-st.write("### Student Data")
-data = {
-    "Name": ["Alice", "Bob", "Charlie"],
-    "CGPA": [8.5, 7.2, 9.1],
-    "Placement": ["Placed", "Not Placed", "Placed"]
-}
+# Add a dataframe WITHOUT pandas
+st.subheader("Student Data")
+data = [
+    {"Name": "Alice", "CGPA": 8.5, "Placed": "Yes"},
+    {"Name": "Bob", "CGPA": 7.2, "Placed": "No"},
+    {"Name": "Charlie", "CGPA": 9.1, "Placed": "Yes"}
+]
 
-st.table(data)
+for student in data:
+    st.write(f"- {student['Name']}: CGPA {student['CGPA']}, {student['Placed']}")
 
-# Simple button
-if st.button("Test Button"):
-    st.balloons()
-    st.write("🎉 Everything works!")
+st.success("✅ App is working! No more restart loop.")
